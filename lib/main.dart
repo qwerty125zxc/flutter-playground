@@ -1,3 +1,4 @@
+import 'package:SNG/io.dart';
 import 'package:flutter/material.dart';
 import 'package:english_words/english_words.dart';
 
@@ -21,32 +22,64 @@ class RandomWordsState extends State<RandomWords> {
   final TextStyle _biggerFont = const TextStyle(fontSize: 18);
   final Set<WordPair> _saved = Set<WordPair>();
 
+  Future<Widget> _scaffold(BuildContext context) async {
+    List<String> list = await IOHelper.read();
+    final Iterable<ListTile> tiles = list.map(
+      (String pair) {
+        return ListTile(
+          title: Text(
+            pair,
+            style: _biggerFont,
+          ),
+        );
+      },
+    );
+    final List<Widget> divided = ListTile.divideTiles(
+      context: context,
+      tiles: tiles,
+    ).toList();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Saved Suggestions'),
+      ),
+      body: ListView.builder(
+        itemCount: divided.length,
+          itemBuilder: (context, index) {
+            final item = divided[index];
+
+            return Dismissible(
+              // Each Dismissible must contain a Key. Keys allow Flutter to
+              // uniquely identify widgets.
+              key: Key(list[index]),
+              // Provide a function that tells the app
+              // what to do after an item has been swiped away.
+              onDismissed: (direction) {
+                // Remove the item from the data source.
+                setState(() {
+                  removeFromDisk(list[index]);
+                });
+
+                // Then show a snackbar.
+                Scaffold.of(context)
+                    .showSnackBar(SnackBar(content: Text("\"${list[index]}\" deleted")));
+              },
+              // Show a red background as the item is swiped away.
+              background: Container(color: Colors.red),
+              child: item,
+            );
+          },
+        ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    void _pushSaved() {
+    void _pushSaved() async {
+      Widget scaf = await _scaffold(context);
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (BuildContext context) {
-            final Iterable<ListTile> tiles = _saved.map(
-              (WordPair pair) {
-                return ListTile(
-                  title: Text(
-                    pair.asPascalCase,
-                    style: _biggerFont,
-                  ),
-                );
-              },
-            );
-            final List<Widget> divided = ListTile.divideTiles(
-              context: context,
-              tiles: tiles,
-            ).toList();
-            return Scaffold(
-              appBar: AppBar(
-                title: Text('Saved Suggestions'),
-              ),
-              body: ListView(children: divided),
-            );
+            return scaf;
           },
         ),
       );
@@ -95,12 +128,23 @@ class RandomWordsState extends State<RandomWords> {
         setState(() {
           if (alreadySaved) {
             _saved.remove(pair);
+            removeFromDisk(pair.asPascalCase);
           } else {
             _saved.add(pair);
           }
+          IOHelper.write(_saved);
         });
       },
     );
+  }
+
+  void removeFromDisk(String pair) async {
+    var list = await IOHelper.read();
+    int index = list.indexOf(pair);
+    if (index != -1) {
+      list.removeAt(index);
+    }
+    IOHelper.overwrite(list);
   }
 }
 
